@@ -10,7 +10,7 @@ from train_models import train_and_evaluate
 import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
-from predict import build_student_row_from_simple_inputs, predict_student_outcome, actionable_features, generate_html_report
+# Lazy-import `predict` inside the Predict tab to avoid import-time model loading/training on app start
 import joblib
 
 
@@ -171,7 +171,16 @@ def main():
                         subject=subject,
                     )
 
-                    result = predict_student_outcome(student_df)
+                    # Lazy import predict module; it will attempt to load artifacts and may trigger training if missing
+                    try:
+                        with st.spinner("Loading prediction module and models (may train if artifacts missing)..."):
+                            import predict as predict_mod
+                    except Exception as e:
+                        logger.exception("Failed to import predict module")
+                        st.error(f"Prediction module failed to load: {e}")
+                        raise
+
+                    result = predict_mod.predict_student_outcome(student_df)
 
                     st.metric("Predicted Marks (out of 100)", result["predicted_final_marks_out_of_100"])
                     st.metric("Pass Probability", f"{result['pass_probability'] * 100:.1f}%")
@@ -198,7 +207,7 @@ def main():
 
                     st.download_button("Download report (txt)", report_text, file_name="student_report.txt")
                     try:
-                        html_report = generate_html_report(student_df, result)
+                        html_report = predict_mod.generate_html_report(student_df, result)
                         st.download_button("Download report (HTML)", html_report, file_name="student_report.html", mime="text/html")
                     except Exception:
                         pass
