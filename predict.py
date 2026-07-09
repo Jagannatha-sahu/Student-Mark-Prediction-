@@ -5,15 +5,42 @@ import pandas as pd
 
 from data_processing import load_and_prepare_data, build_student_row_from_simple_inputs
 
+# Delay importing heavy training routine until required (helps on import-time in Streamlit deploy)
+try:
+    from train_models import train_and_evaluate
+except Exception:
+    train_and_evaluate = None
+
 
 BASE_DIR = Path(__file__).resolve().parent
 
 
 def _load_artifacts():
     artifacts_dir = BASE_DIR / "artifacts"
-    reg_model = joblib.load(artifacts_dir / "best_regression_model.joblib")
-    clf_model = joblib.load(artifacts_dir / "best_classification_model.joblib")
-    reg_importance_df = joblib.load(artifacts_dir / "regression_feature_importance.joblib")
+    # Check required artifact files
+    required = [
+        artifacts_dir / "best_regression_model.joblib",
+        artifacts_dir / "best_classification_model.joblib",
+        artifacts_dir / "regression_feature_importance.joblib",
+    ]
+
+    missing = any(not p.exists() for p in required)
+    if missing:
+        print("Model artifacts not found. Attempting to train models to generate artifacts (may take a few minutes)...")
+        if train_and_evaluate is None:
+            raise FileNotFoundError(
+                "Model artifacts are missing and training function is not available to create them."
+            )
+        train_and_evaluate(BASE_DIR)
+
+    # Load artifacts
+    try:
+        reg_model = joblib.load(artifacts_dir / "best_regression_model.joblib")
+        clf_model = joblib.load(artifacts_dir / "best_classification_model.joblib")
+        reg_importance_df = joblib.load(artifacts_dir / "regression_feature_importance.joblib")
+    except Exception as e:
+        raise RuntimeError(f"Failed to load model artifacts: {e}") from e
+
     return reg_model, clf_model, reg_importance_df
 
 
